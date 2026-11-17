@@ -21,14 +21,14 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# Updated Telegram Bot Token
+# Telegram Bot Token
 TOKEN = '9126975810:AAHD34l3tnFgh6pmCS8zgf203kqkGb-s_cY'
 bot = telebot.TeleBot(TOKEN)
 
 # Dictionary to store user data
 users = {}
 
-# Track user states (for setting UPI or Bank details)
+# Track user states (for setting UPI, Bank details or Deposit)
 user_states = {}
 
 def get_main_keyboard():
@@ -36,11 +36,12 @@ def get_main_keyboard():
     btn_balance = types.KeyboardButton("💰 My Balance")
     btn_ref = types.KeyboardButton("🚀 Refer & Earn")
     btn_withdraw = types.KeyboardButton("💸 Withdraw Money")
-    btn_bonus = types.KeyboardButton("🎁 Daily Bonus")
+    btn_deposit = types.KeyboardButton("💳 Deposit Money")  # Deposit Button Added Here
+    btn_faucet = types.KeyboardButton("🚰 Daily Faucet")
     btn_account = types.KeyboardButton("⚙️ Account & UPI")
     markup.add(btn_balance, btn_ref)
-    markup.add(btn_withdraw, btn_bonus)
-    markup.add(btn_account)
+    markup.add(btn_withdraw, btn_deposit)
+    markup.add(btn_faucet, btn_account)
     return markup
 
 @bot.message_handler(commands=['start'])
@@ -125,6 +126,16 @@ def handle_messages(message):
         bot.reply_to(message, f"✅ **Bank Details Saved Successfully!**\n`{text}`", parse_mode="Markdown", reply_markup=get_main_keyboard())
         return
 
+    elif state == "waiting_for_deposit_proof":
+        user_states[user_id] = None
+        bot.reply_to(
+            message, 
+            "✅ **Deposit Request Submitted!**\nAdmin verify karne ke baad aapke wallet mein balance add kar diya jayega.", 
+            parse_mode="Markdown", 
+            reply_markup=get_main_keyboard()
+        )
+        return
+
     if text == "💰 My Balance":
         balance = users[user_id]["balance"]
         ref_count = users[user_id]["referral_count"]
@@ -179,22 +190,31 @@ def handle_messages(message):
                 f"👇 **Choose where you want to receive your money:**"
             )
             bot.reply_to(message, wd_msg, parse_mode="Markdown", reply_markup=markup)
+            
+    elif text == "💳 Deposit Money":
+        deposit_msg = (
+            f"💳 **DEPOSIT FUNDS** 💳\n\n"
+            f"Apne account mein balance add karne ke liye niche diye gaye UPI ID par payment karein:\n\n"
+            f"📌 **UPI ID:** `shyamji@upi`\n"
+            f"(Ya QR code par scan karein)\n\n"
+            f"⚠️ Payment karne ke baad apna **UTR Number / Transaction Reference** yahan bhej dein."
+        )
+        user_states[user_id] = "waiting_for_deposit_proof"
+        bot.reply_to(message, deposit_msg, parse_mode="Markdown")
         
-    elif text == "🎁 Daily Bonus":
-        today = date.today()
-        if users[user_id]["last_bonus_date"] == today:
-            bonus_msg = "🎁 **Daily Reward:** You have already collected today's bonus! Come back tomorrow for a new reward. 🔥"
-        else:
-            users[user_id]["balance"] += 1
-            users[user_id]["last_bonus_date"] = today
-            current_bal = users[user_id]["balance"]
-            bonus_msg = (
-                f"🎉 **CONGRATULATIONS!** 🎉\n\n"
-                f"🎁 You have successfully collected your **₹1** Daily Bonus!\n"
-                f"💰 **New Balance:** `₹{current_bal}`\n\n"
-                f"✨ Come back tomorrow for your next bonus!"
-            )
-        bot.reply_to(message, bonus_msg, parse_mode="Markdown")
+    elif text == "🚰 Daily Faucet":
+        faucet_msg = (
+            f"🚰 **DAILY FAUCET & REWARDS** 🚰\n\n"
+            f"Claim your daily rewards and participate in exclusive contests to boost your earnings!\n\n"
+            f"👇 Choose an option below:"
+        )
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        markup.add(
+            types.InlineKeyboardButton("🎁 Claim Daily Bonus (₹1)", callback_data="claim_daily_bonus"),
+            types.InlineKeyboardButton("📢 Share & Earn", callback_data="share_and_earn"),
+            types.InlineKeyboardButton("🏆 Daily Referral Contest", callback_data="daily_ref_contest")
+        )
+        bot.reply_to(message, faucet_msg, parse_mode="Markdown", reply_markup=markup)
         
     elif text == "⚙️ Account & UPI":
         method = users[user_id]["payout_method"]
@@ -213,20 +233,60 @@ def handle_messages(message):
         )
         bot.reply_to(message, acc_msg, parse_mode="Markdown", reply_markup=markup)
 
-@bot.callback_query_handler(func=lambda call: call.data in ["withdraw_upi", "withdraw_bank"])
-def callback_withdrawal_choice(call):
-    user_id = call.from_user.id
-    if call.data == "withdraw_upi":
-        user_states[user_id] = "waiting_for_upi"
-        bot.send_message(call.message.chat.id, "📱 **Please send your UPI ID:**\n(Example: `yourname@paytm` or `ybl`)", parse_mode="Markdown")
-    elif call.data == "withdraw_bank":
-        user_states[user_id] = "waiting_for_bank"
-        bot.send_message(call.message.chat.id, "🏦 **Please send your Bank Details:**\n(Format: `A/C No, IFSC Code, Name`)", parse_mode="Markdown")
+@bot.callback_query_handler(func=lambda call: call.data in ["withdraw_upi", "withdraw_bank", "claim_daily_bonus", "share_and_earn", "daily_ref_contest"])
+def callback_handler(call):
+    user_id = call.message.chat.id
+    data = call.data
+    
+    if data == "withdraw_upi":
+        user_states[call.from_user.id] = "waiting_for_upi"
+        bot.send_message(user_id, "📱 **Please send your UPI ID:**\n(Example: `yourname@paytm` or `ybl`)", parse_mode="Markdown")
+        
+    elif data == "withdraw_bank":
+        user_states[call.from_user.id] = "waiting_for_bank"
+        bot.send_message(user_id, "🏦 **Please send your Bank Details:**\n(Format: `A/C No, IFSC Code, Name`)", parse_mode="Markdown")
+        
+    elif data == "claim_daily_bonus":
+        today = date.today()
+        if users[user_id]["last_bonus_date"] == today:
+            bot.answer_callback_query(call.id, "⚠️ Already claimed today!", show_alert=True)
+            bot.send_message(user_id, "🎁 **Daily Reward:** You have already collected today's bonus! Come back tomorrow. 🔥", parse_mode="Markdown")
+        else:
+            users[user_id]["balance"] += 1
+            users[user_id]["last_bonus_date"] = today
+            current_bal = users[user_id]["balance"]
+            bot.answer_callback_query(call.id, "🎉 +₹1 Bonus Claimed!", show_alert=True)
+            bot.send_message(
+                user_id,
+                f"🎉 **CONGRATULATIONS!** 🎉\n\n"
+                f"🎁 You successfully collected your **₹1** Daily Faucet Bonus!\n"
+                f"💰 **New Balance:** `₹{current_bal}`",
+                parse_mode="Markdown"
+            )
+            
+    elif data == "share_and_earn":
+        bot_username = bot.get_me().username
+        ref_link = f"https://t.me/{bot_username}?start={call.from_user.id}"
+        share_text = (
+            f"📢 **SHARE & EARN**\n\n"
+            f"Apne dosto ko WhatsApp, Telegram aur Facebook groups par share karein aur har join par instant ₹3 payein!\n\n"
+            f"🔗 Aapka Link:\n`{ref_link}`"
+        )
+        bot.send_message(user_id, share_text, parse_mode="Markdown")
+        
+    elif data == "daily_ref_contest":
+        contest_text = (
+            f"🏆 **DAILY REFERRAL CONTEST** 🏆\n\n"
+            f"Top referrers of the day win special cash prizes!\n\n"
+            f"🥇 1st Rank: **₹500 Extra**\n"
+            f"🥈 2nd Rank: **₹250 Extra**\n"
+            f"🥉 3rd Rank: **₹100 Extra**\n\n"
+            f"🚀 Contest daily reset hota hai. Zyada refer karein aur leaderboard par aayein!"
+        )
+        bot.send_message(user_id, contest_text, parse_mode="Markdown")
 
 if __name__ == '__main__':
-    # Start Flask keep-alive server in background
     keep_alive()
-    
     while True:
         try:
             print("Bot is running...")
