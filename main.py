@@ -1,8 +1,27 @@
-import telebot
-from telebot import types
+import os
 import time
 from datetime import date
+import logging
+from flask import Flask
+from threading import Thread
+import telebot
+from telebot import types
 
+# Flask server setup to satisfy Render port binding requirement
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is running 24/7!"
+
+def run():
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# Telegram Bot Setup
 TOKEN = '9126975810:AAFthAtAMIcT5_giUKAnNnIUuI2_TrDh74k'
 bot = telebot.TeleBot(TOKEN)
 
@@ -18,7 +37,7 @@ def get_main_keyboard():
     btn_ref = types.KeyboardButton("🚀 Refer & Earn")
     btn_withdraw = types.KeyboardButton("💸 Withdraw Money")
     btn_bonus = types.KeyboardButton("🎁 Daily Bonus")
-    btn_account = types.KeyboardButton("⚙️ Account & UPI")  # 5th Button Added Here
+    btn_account = types.KeyboardButton("⚙️ Account & UPI")
     markup.add(btn_balance, btn_ref)
     markup.add(btn_withdraw, btn_bonus)
     markup.add(btn_account)
@@ -204,11 +223,15 @@ def callback_withdrawal_choice(call):
         user_states[user_id] = "waiting_for_bank"
         bot.send_message(call.message.chat.id, "🏦 **Please send your Bank Details:**\n(Format: `A/C No, IFSC Code, Name`)", parse_mode="Markdown")
 
-while True:
-    try:
-        print("Bot is running...")
-        bot.infinity_polling(timeout=60, long_polling_timeout=60)
-    except Exception as e:
-        print(f"Error occurred: {e}. Reconnecting in 5 seconds...")
-        time.sleep(5)
-        
+if __name__ == '__main__':
+    # Start Flask keep-alive server in background
+    keep_alive()
+    
+    while True:
+        try:
+            print("Bot is running...")
+            bot.infinity_polling(timeout=60, long_polling_timeout=60)
+        except Exception as e:
+            print(f"Error occurred: {e}. Reconnecting in 5 seconds...")
+            time.sleep(5)
+            
