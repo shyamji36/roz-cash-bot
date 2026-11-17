@@ -1,100 +1,57 @@
-import telebot
-from telebot import types
+import os
+import logging
+from flask import Flask
+from threading import Thread
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
-# Bot Token aur Username
-TOKEN = '9126975810:AAFthAtAMIcT5_giUKAnNnIUuI2_TrDh74k'
-BOT_USERNAME = 'Roz_Cash_Bot'
+# Logging setup
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
-bot = telebot.TeleBot(TOKEN)
+# Flask server to satisfy Render port binding requirement
+app = Flask('')
 
-# In-memory databases (Temporary storage for user data)
-users = {}
-balances = {}
-referrals = {}
+@app.route('/')
+def home():
+    return "Bot is running 24/7!"
 
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    user_id = message.from_user.id
-    args = message.text.split()
-    
-    # Register user if new
-    if user_id not in users:
-        users[user_id] = {
-            'first_name': message.from_user.first_name,
-            'username': message.from_user.username
-        }
-        balances[user_id] = 0.0
-        referrals[user_id] = 0
-        
-        # Handle Referral if joined via link
-        if len(args) > 1:
-            try:
-                referrer_id = int(args[1])
-                if referrer_id != user_id and referrer_id in users:
-                    referrals[referrer_id] += 1
-                    balances[referrer_id] += 2.0  # ₹2 per referral bonus
-                    bot.send_message(referrer_id, f"🎉 **Aapko naya referral mila hai!**\nBonus: ₹2.00 add ho gaye hain.")
-            except ValueError:
-                pass
+def run():
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
-    # Main Menu Markup
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    markup.add(
-        types.KeyboardButton("💰 Balance"),
-        types.KeyboardButton("👥 Refer & Earn"),
-        types.KeyboardButton("💸 Withdraw"),
-        types.KeyboardButton("ℹ️ Help")
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# Telegram Bot logic with New Token
+BOT_TOKEN = "9126975810:AAHD34l3tnFgh6pmCS8zgf203kqkGb-s_cY"
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_name = update.effective_user.first_name
+    await update.message.reply_text(
+        f"Namaste {user_name} ji! Welcome to Roz Cash Bot.\n"
+        f"Aapka referral aur balance system yahan active hai."
     )
 
-    welcome_text = (
-        f"👋 **Welcome to Roz Cash Bot, {message.from_user.first_name}!**\n\n"
-        f"Yahan aap doston ko refer karke aur daily rewards ke zariye paise kama sakte hain.\n"
-        f"Neeche diye gaye buttons ka istemaal karein."
-    )
-    bot.send_message(message.chat.id, welcome_text, parse_mode="Markdown", reply_markup=markup)
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    await update.message.reply_text(f"Aapne kaha: {text}")
 
-@bot.message_handler(func=lambda message: True)
-def handle_messages(message):
-    user_id = message.from_user.id
-    text = message.text
+def main():
+    # Start Flask server in background thread
+    keep_alive()
 
-    if text == "💰 Balance":
-        bal = balances.get(user_id, 0.0)
-        refs = referrals.get(user_id, 0)
-        msg = (
-            f"👤 **Aapki Account Details:**\n\n"
-            f"💵 **Current Balance:** ₹{bal:.2f}\n"
-            f"👥 **Total Referrals:** {refs} users"
-        )
-        bot.send_message(message.chat.id, msg, parse_mode="Markdown")
+    # Start Telegram Bot
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    elif text == "👥 Refer & Earn":
-        ref_link = f"https://t.me/{BOT_USERNAME}?start={user_id}"
-        msg = (
-            f"🔗 **Aapka Referral Link:**\n`{ref_link}`\n\n"
-            f"Is link ko apne doston ke sath share karein. Har ek join par aapko **₹2** milenge!"
-        )
-        bot.send_message(message.chat.id, msg, parse_mode="Markdown")
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-    elif text == "💸 Withdraw":
-        bal = balances.get(user_id, 0.0)
-        if bal < 10.0:
-            bot.send_message(message.chat.id, f"❌ Minimum withdrawal limit **₹10.00** hai.\nAapka current balance ₹{bal:.2f} hai.")
-        else:
-            bot.send_message(message.chat.id, "✅ Withdrawal request accept ho gayi hai! Jaldi hi amount aapke account mein bhej diya jayega.")
-            balances[user_id] = 0.0  # Reset balance after withdrawal
+    print("Bot is starting...")
+    application.run_polling()
 
-    elif text == "ℹ️ Help":
-        help_text = (
-            "💡 **Madad ke liye:**\n\n"
-            "1. **Refer & Earn:** Apne doston ko invite karein.\n"
-            "2. **Balance Check:** Apna earn kiya hua paisa dekhein.\n"
-            "3. **Withdraw:** Minimum ₹10 hone par UPI ya Bank mein withdraw karein."
-        )
-        bot.send_message(message.chat.id, help_text, parse_mode="Markdown")
-
-# Bot ko continuously run karne ke liye
 if __name__ == '__main__':
-    print("Bot is running...")
-    bot.infinity_polling()
-  
+    main()
+    
