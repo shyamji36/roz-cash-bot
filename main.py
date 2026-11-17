@@ -28,7 +28,7 @@ bot = telebot.TeleBot(TOKEN)
 # Dictionary to store user data
 users = {}
 
-# Track user states (for setting UPI, Bank details or Deposit)
+# Track user states (for setting UPI, Bank details or Deposit proof)
 user_states = {}
 
 def get_main_keyboard():
@@ -36,7 +36,7 @@ def get_main_keyboard():
     btn_balance = types.KeyboardButton("💰 My Balance")
     btn_ref = types.KeyboardButton("🚀 Refer & Earn")
     btn_withdraw = types.KeyboardButton("💸 Withdraw Money")
-    btn_deposit = types.KeyboardButton("💳 Deposit Money")  # Deposit Button Added Here
+    btn_deposit = types.KeyboardButton("💳 Deposit Money")
     btn_faucet = types.KeyboardButton("🚰 Daily Faucet")
     btn_account = types.KeyboardButton("⚙️ Account & UPI")
     markup.add(btn_balance, btn_ref)
@@ -126,16 +126,6 @@ def handle_messages(message):
         bot.reply_to(message, f"✅ **Bank Details Saved Successfully!**\n`{text}`", parse_mode="Markdown", reply_markup=get_main_keyboard())
         return
 
-    elif state == "waiting_for_deposit_proof":
-        user_states[user_id] = None
-        bot.reply_to(
-            message, 
-            "✅ **Deposit Request Submitted!**\nAdmin verify karne ke baad aapke wallet mein balance add kar diya jayega.", 
-            parse_mode="Markdown", 
-            reply_markup=get_main_keyboard()
-        )
-        return
-
     if text == "💰 My Balance":
         balance = users[user_id]["balance"]
         ref_count = users[user_id]["referral_count"]
@@ -193,14 +183,20 @@ def handle_messages(message):
             
     elif text == "💳 Deposit Money":
         deposit_msg = (
-            f"💳 **DEPOSIT FUNDS** 💳\n\n"
-            f"Apne account mein balance add karne ke liye niche diye gaye UPI ID par payment karein:\n\n"
-            f"📌 **UPI ID:** `shyamji@upi`\n"
-            f"(Ya QR code par scan karein)\n\n"
-            f"⚠️ Payment karne ke baad apna **UTR Number / Transaction Reference** yahan bhej dein."
+            f"💳 **CHOOSE DEPOSIT METHOD** 💳\n\n"
+            f"Aap kis currency mein deposit karna chahte hain? Neeche diye gaye option ko select karein:"
         )
-        user_states[user_id] = "waiting_for_deposit_proof"
-        bot.reply_to(message, deposit_msg, parse_mode="Markdown")
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("🪙 TRX", callback_data="dep_trx"),
+            types.InlineKeyboardButton("💵 USDT", callback_data="dep_usdt"),
+            types.InlineKeyboardButton("🇮🇳 INR", callback_data="dep_inr"),
+            types.InlineKeyboardButton("💎 TON", callback_data="dep_ton"),
+            types.InlineKeyboardButton("🪙 GRAM", callback_data="dep_gram"),
+            types.InlineKeyboardButton("🔵 BGB", callback_data="dep_bgb"),
+            types.InlineKeyboardButton("💲 USDC", callback_data="dep_usdc")
+        )
+        bot.reply_to(message, deposit_msg, parse_mode="Markdown", reply_markup=markup)
         
     elif text == "🚰 Daily Faucet":
         faucet_msg = (
@@ -233,7 +229,7 @@ def handle_messages(message):
         )
         bot.reply_to(message, acc_msg, parse_mode="Markdown", reply_markup=markup)
 
-@bot.callback_query_handler(func=lambda call: call.data in ["withdraw_upi", "withdraw_bank", "claim_daily_bonus", "share_and_earn", "daily_ref_contest"])
+@bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
     user_id = call.message.chat.id
     data = call.data
@@ -272,7 +268,7 @@ def callback_handler(call):
             f"Apne dosto ko WhatsApp, Telegram aur Facebook groups par share karein aur har join par instant ₹3 payein!\n\n"
             f"🔗 Aapka Link:\n`{ref_link}`"
         )
-        bot.send_message(user_id, share_text, parse_mode="Markdown")
+        bot.send_message(user_id, share_text, parse_Mode="Markdown")
         
     elif data == "daily_ref_contest":
         contest_text = (
@@ -284,6 +280,22 @@ def callback_handler(call):
             f"🚀 Contest daily reset hota hai. Zyada refer karein aur leaderboard par aayein!"
         )
         bot.send_message(user_id, contest_text, parse_mode="Markdown")
+        
+    # Deposit Addresses Handling
+    elif data == "dep_trx":
+        bot.send_message(user_id, "🪙 **TRX Deposit Address:**\n`TYoYAgDAQsnJVYyALd5KZXiCmPzdKkzUc9`\n\n⚠️ Minimum deposit: 10 TRX. Payment ke baad TXID bhejein.", parse_mode="Markdown")
+    elif data == "dep_usdt":
+        bot.send_message(user_id, "💵 **USDT Deposit Address (TRC20):**\n`TYoYAgDAQsnJVYyALd5KZXiCmPzdKkzUc9`\n\n⚠️ Minimum deposit: $5. Payment ke baad TXID bhejein.", parse_mode="Markdown")
+    elif data == "dep_inr":
+        bot.send_message(user_id, "🇮🇳 **INR Deposit (UPI):**\nUPI ID: `shyamji@upi`\n\n⚠️ Payment karne ke baad UTR / Screenshot bhejein.", parse_mode="Markdown")
+    elif data == "dep_ton":
+        bot.send_message(user_id, "💎 **TON Deposit Address:**\n`TON_WALLET_ADDRESS_YAHAN_DALO`\n\n⚠️ Minimum deposit: 1 TON.", parse_mode="Markdown")
+    elif data == "dep_gram":
+        bot.send_message(user_id, "🪙 **GRAM Deposit Address:**\n`GRAM_WALLET_ADDRESS_YAHAN_DALO`\n\n⚠️ Payment ke baad TXID bhejein.", parse_mode="Markdown")
+    elif data == "dep_bgb":
+        bot.send_message(user_id, "🔵 **BGB Deposit Address:**\n`0xfa76Bb73AF40b082D5762969f0909373deBD9cdD`\n\n⚠️ Payment ke baad TXID bhejein.", parse_mode="Markdown")
+    elif data == "dep_usdc":
+        bot.send_message(user_id, "💲 **USDC Deposit Address:**\n`0xfa76Bb73AF40b082D5762969f0909373deBD9cdD`\n\n⚠️ Payment ke baad TXID bhejein.", parse_mode="Markdown")
 
 if __name__ == '__main__':
     keep_alive()
@@ -294,4 +306,4 @@ if __name__ == '__main__':
         except Exception as e:
             print(f"Error occurred: {e}. Reconnecting in 5 seconds...")
             time.sleep(5)
-            
+    
