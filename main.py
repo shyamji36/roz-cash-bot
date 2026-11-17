@@ -21,8 +21,8 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# Telegram Bot Setup
-TOKEN = '9126975810:AAFthAtAMIcT5_giUKAnNnIUuI2_TrDh74k'
+# Updated Telegram Bot Token
+TOKEN = '9126975810:AAHD34l3tnFgh6pmCS8zgf203kqkGb-s_cY'
 bot = telebot.TeleBot(TOKEN)
 
 # Dictionary to store user data
