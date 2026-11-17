@@ -1,145 +1,214 @@
-import os
-import logging
-from flask import Flask
-from threading import Thread
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+import telebot
+from telebot import types
+import time
+from datetime import date
 
-# Logging setup
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+TOKEN = '9126975810:AAFthAtAMIcT5_giUKAnNnIUuI2_TrDh74k'
+bot = telebot.TeleBot(TOKEN)
 
-# Flask server to satisfy Render port binding requirement
-app = Flask('')
+# Dictionary to store user data
+users = {}
 
-@app.route('/')
-def home():
-    return "Bot is running 24/7!"
+# Track user states (for setting UPI or Bank details)
+user_states = {}
 
-def run():
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-# Telegram Bot Token
-BOT_TOKEN = "9126975810:AAHD34l3tnFgh6pmCS8zgf203kqkGb-s_cY"
-
-# In-memory database for users and balances (aap baad mein isme database jod sakte hain)
-users_db = {}
-
-# Main Menu Keyboard
 def get_main_keyboard():
-    keyboard = [
-        ["💰 Balance", "👥 Refer & Earn"],
-        ["💸 Withdraw", "🎁 Daily Bonus"],
-        ["ℹ️ Help"]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    btn_balance = types.KeyboardButton("💰 My Balance")
+    btn_ref = types.KeyboardButton("🚀 Refer & Earn")
+    btn_withdraw = types.KeyboardButton("💸 Withdraw Money")
+    btn_bonus = types.KeyboardButton("🎁 Daily Bonus")
+    btn_account = types.KeyboardButton("⚙️ Account & UPI")  # 5th Button Added Here
+    markup.add(btn_balance, btn_ref)
+    markup.add(btn_withdraw, btn_bonus)
+    markup.add(btn_account)
+    return markup
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    user_id = user.id
+@bot.message_handler(commands=['start'])
+def start_command(message):
+    user_id = message.from_user.id
+    args = message.text.split()
     
-    # Register user if new
-    if user_id not in users_db:
-        users_db[user_id] = {
-            "name": user.first_name,
-            "balance": 5.0,  # Joining bonus
-            "referrals": 0
+    if user_id not in users:
+        users[user_id] = {
+            "balance": 5,           # Joining Bonus ₹5
+            "referred_by": None,
+            "referral_count": 0,    # Total referrals count
+            "last_bonus_date": None,
+            "payout_method": "Not Set",
+            "payout_details": "Not Set"
         }
+        
+        if len(args) > 1:
+            try:
+                referrer_id = int(args[1])
+                if referrer_id in users and referrer_id != user_id:
+                    users[user_id]["referred_by"] = referrer_id
+                    users[referrer_id]["balance"] += 3            # Referrer gets ₹3 bonus
+                    users[referrer_id]["referral_count"] += 1     # Total count +1
+                    
+                    bot.send_message(
+                        referrer_id, 
+                        "🔥 ── **NEW REFERRAL JOINED!** ── 🔥\n\n"
+                        "🎉 A new user joined using your referral link!\n"
+                        "💰 **+₹3** has been successfully added to your account. 🚀",
+                        parse_mode="Markdown"
+                    )
+            except ValueError:
+                pass
 
-    welcome_text = (
-        f"👋 Namaste {user.first_name} ji!\n\n"
-        f"Welcome to Roz Cash Bot. Aap yahan dosto ko refer karke aur daily rewards ke zariye paise kama sakte hain.\n"
-        f"🎁 Aapko  ₹5.0 Joining Bonus mil gaya hai!\n\n"
-        f"Neeche diye gaye buttons ka istemaal karein:"
-    )
-    await update.message.reply_text(welcome_text, reply_markup=get_main_keyboard())
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    user_id = update.effective_user.id
-
-    # Ensure user exists in db
-    if user_id not in users_db:
-        users_db[user_id] = {"name": update.effective_user.first_name, "balance": 0.0, "referrals": 0}
-
-    user_data = users_db[user_id]
-
-    if text == "💰 Balance":
-        balance = user_data["balance"]
-        referrals = user_data["referrals"]
-        await update.message.reply_text(
-            f"👤 **Account Details:**\n\n"
-            f"💵 Current Balance: ₹{balance}\n"
-            f"👥 Total Referrals: {referrals}\n\n"
-            f"Kamanay ke liye dosto ko refer karein!",
-            reply_markup=get_main_keyboard()
-        )
-
-    elif text == "👥 Refer & Earn":
-        bot_username = context.bot.username
-        ref_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
-        await update.message.reply_text(
-            f"🔗 **Refer & Earn Program**\n\n"
-            f"Apne dost ko is link se invite karein aur har referral par ₹2 paayein!\n\n"
-            f"Aapka Referral Link:\n`{ref_link}`",
-            parse_mode="Markdown",
-            reply_markup=get_main_keyboard()
-        )
-
-    elif text == "💸 Withdraw":
-        balance = user_data["balance"]
-        min_withdraw = 50.0
-        if balance >= min_withdraw:
-            await update.message.reply_text(
-                f"✅ Aapka balance ₹{balance} hai. Withdrawal request process ki ja rahi hai. Kripya apna UPI ID bhejein.",
-                reply_markup=get_main_keyboard()
-            )
-        else:
-            needed = min_withdraw - balance
-            await update.message.reply_text(
-                f"❌ Minimum withdrawal limit ₹{min_withdraw} hai.\n"
-                f"Aapko ₹{needed} aur chahiye withdraw karne ke liye. Dosto ko refer karein!",
-                reply_markup=get_main_keyboard()
-            )
-
-    elif text == "🎁 Daily Bonus":
-        await update.message.reply_text(
-            "🎁 Aapko aaj ka Daily Bonus ₹1 mil gaya hai!",
-            reply_markup=get_main_keyboard()
-        )
-        user_data["balance"] += 1.0
-
-    elif text == "ℹ️ Help":
-        await update.message.reply_text(
-            "ℹ️ **Help & Support**\n\n"
-            "1. Dosto ko refer karke paise kamayein.\n"
-            "2. Daily bonus claim karein.\n"
-            "3. Minimum ₹50 hone par UPI ya Bank mein withdraw karein.\n\n"
-            "Kisi bhi samasya ke liye admin se sampark karein.",
-            reply_markup=get_main_keyboard()
-        )
-    else:
-        await update.message.reply_text(
-            "Kripya niche diye gaye menu buttons ka istemaal karein.",
-            reply_markup=get_main_keyboard()
-        )
-
-def main():
-    keep_alive()
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-
-    print("Bot is starting with full features...")
-    application.run_polling()
-
-if __name__ == '__main__':
-    main()
+    bot_username = bot.get_me().username
+    ref_link = f"https://t.me/{bot_username}?start={user_id}"
+    current_balance = users[user_id]["balance"]
     
+    welcome_msg = (
+        f"╔═════════════════════╗\n"
+        f"      🌟 **ROZ CASH BOT** 🌟      \n"
+        f"╚═════════════════════╝\n\n"
+        f"👋 Hello friend! Welcome to the bot.\n\n"
+        f"🎁 **Joining Bonus:** `₹5 Free`\n"
+        f"💎 **Your Balance:** `₹{current_balance}`\n\n"
+        f"🔗 **Your Referral Link:**\n"
+        f"`{ref_link}`\n\n"
+        f"⚡ *Share with friends & earn ₹3 per join!*\n"
+        f"👇 *Choose an option from the menu below:*"
+    )
+    
+    bot.send_message(message.chat.id, welcome_msg, parse_mode="Markdown", reply_markup=get_main_keyboard())
+
+@bot.message_handler(func=lambda message: True)
+def handle_messages(message):
+    user_id = message.from_user.id
+    text = message.text
+    
+    if user_id not in users:
+        users[user_id] = {
+            "balance": 5, 
+            "referred_by": None, 
+            "referral_count": 0, 
+            "last_bonus_date": None,
+            "payout_method": "Not Set",
+            "payout_details": "Not Set"
+        }
+    
+    state = user_states.get(user_id)
+    if state == "waiting_for_upi":
+        users[user_id]["payout_method"] = "UPI"
+        users[user_id]["payout_details"] = text
+        user_states[user_id] = None
+        bot.reply_to(message, f"✅ **UPI ID Saved Successfully!**\n`{text}`", parse_mode="Markdown", reply_markup=get_main_keyboard())
+        return
+        
+    elif state == "waiting_for_bank":
+        users[user_id]["payout_method"] = "Bank Account"
+        users[user_id]["payout_details"] = text
+        user_states[user_id] = None
+        bot.reply_to(message, f"✅ **Bank Details Saved Successfully!**\n`{text}`", parse_mode="Markdown", reply_markup=get_main_keyboard())
+        return
+
+    if text == "💰 My Balance":
+        balance = users[user_id]["balance"]
+        ref_count = users[user_id]["referral_count"]
+        method = users[user_id]["payout_method"]
+        details = users[user_id]["payout_details"]
+        bal_msg = (
+            f"┌──────── 👝 **WALLET** ────────┐\n\n"
+            f"   💰 Available Balance: **₹{balance}**\n"
+            f"   👥 Total Referrals: **{ref_count} Users**\n"
+            f"   💳 Payout Mode: `{method}`\n"
+            f"   📄 Details: `{details}`\n"
+            f"   🟢 Account Status: **Active**\n\n"
+            f"└──────────────────────────┘"
+        )
+        bot.reply_to(message, bal_msg, parse_mode="Markdown")
+        
+    elif text == "🚀 Refer & Earn":
+        bot_username = bot.get_me().username
+        ref_link = f"https://t.me/{bot_username}?start={user_id}"
+        ref_count = users[user_id]["referral_count"]
+        ref_msg = (
+            f"┌────── 🚀 **REFER & EARN** ──────┐\n\n"
+            f"🔗 **Your Link:**\n`{ref_link}`\n\n"
+            f"👥 **Total Joins:** `{ref_count} Friends`\n"
+            f"💡 *Earn **₹3** for every successful invite!*\n"
+            f"Share it on WhatsApp & Telegram! 💸\n\n"
+            f"└──────────────────────────┘"
+        )
+        bot.reply_to(message, ref_msg, parse_mode="Markdown")
+        
+    elif text == "💸 Withdraw Money":
+        balance = users[user_id]["balance"]
+        if balance < 100:
+            wd_msg = (
+                f"┌───── 💸 **WITHDRAWAL** ─────┐\n\n"
+                f"⚠️ **Minimum Payout:** ₹100\n"
+                f"❌ Your balance is currently below the limit (`₹{balance}`).\n\n"
+                f"🏃‍♂️ Refer more friends to reach ₹100 quickly!\n\n"
+                f"└──────────────────────────┘"
+            )
+            bot.reply_to(message, wd_msg, parse_mode="Markdown")
+        else:
+            markup = types.InlineKeyboardMarkup(row_width=2)
+            markup.add(
+                types.InlineKeyboardButton("📱 UPI ID", callback_data="withdraw_upi"),
+                types.InlineKeyboardButton("🏦 Bank Account", callback_data="withdraw_bank")
+            )
+            wd_msg = (
+                f"┌───── 💸 **WITHDRAWAL** ─────┐\n\n"
+                f"🎉 Your balance is ready for payout!\n"
+                f"💰 **Balance:** `₹{balance}`\n\n"
+                f"👇 **Choose where you want to receive your money:**"
+            )
+            bot.reply_to(message, wd_msg, parse_mode="Markdown", reply_markup=markup)
+        
+    elif text == "🎁 Daily Bonus":
+        today = date.today()
+        if users[user_id]["last_bonus_date"] == today:
+            bonus_msg = "🎁 **Daily Reward:** You have already collected today's bonus! Come back tomorrow for a new reward. 🔥"
+        else:
+            users[user_id]["balance"] += 1
+            users[user_id]["last_bonus_date"] = today
+            current_bal = users[user_id]["balance"]
+            bonus_msg = (
+                f"🎉 **CONGRATULATIONS!** 🎉\n\n"
+                f"🎁 You have successfully collected your **₹1** Daily Bonus!\n"
+                f"💰 **New Balance:** `₹{current_bal}`\n\n"
+                f"✨ Come back tomorrow for your next bonus!"
+            )
+        bot.reply_to(message, bonus_msg, parse_mode="Markdown")
+        
+    elif text == "⚙️ Account & UPI":
+        method = users[user_id]["payout_method"]
+        details = users[user_id]["payout_details"]
+        acc_msg = (
+            f"┌───── ⚙️ **ACCOUNT SETTINGS** ─────┐\n\n"
+            f"👤 **User ID:** `{user_id}`\n"
+            f"💳 **Saved Method:** `{method}`\n"
+            f"📄 **Details:** `{details}`\n\n"
+            f"👇 Click below to set or update your details:"
+        )
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("✏️ Set UPI ID", callback_data="withdraw_upi"),
+            types.InlineKeyboardButton("✏️ Set Bank Account", callback_data="withdraw_bank")
+        )
+        bot.reply_to(message, acc_msg, parse_mode="Markdown", reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda call: call.data in ["withdraw_upi", "withdraw_bank"])
+def callback_withdrawal_choice(call):
+    user_id = call.from_user.id
+    if call.data == "withdraw_upi":
+        user_states[user_id] = "waiting_for_upi"
+        bot.send_message(call.message.chat.id, "📱 **Please send your UPI ID:**\n(Example: `yourname@paytm` or `ybl`)", parse_mode="Markdown")
+    elif call.data == "withdraw_bank":
+        user_states[user_id] = "waiting_for_bank"
+        bot.send_message(call.message.chat.id, "🏦 **Please send your Bank Details:**\n(Format: `A/C No, IFSC Code, Name`)", parse_mode="Markdown")
+
+while True:
+    try:
+        print("Bot is running...")
+        bot.infinity_polling(timeout=60, long_polling_timeout=60)
+    except Exception as e:
+        print(f"Error occurred: {e}. Reconnecting in 5 seconds...")
+        time.sleep(5)
+        
