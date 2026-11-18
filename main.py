@@ -274,9 +274,9 @@ def callback_handler(call):
         contest_text = (
             f"🏆 **DAILY REFERRAL CONTEST** 🏆\n\n"
             f"Top referrers of the day win special cash prizes!\n\n"
-            f"🥇 1st Rank: **₹500 Extra**\n"
-            f"🥈 2nd Rank: **₹250 Extra**\n"
-            f"🥉 3rd Rank: **₹100 Extra**\n\n"
+            f"🥇 1st Rank: **₹150 Extra**\n"
+            f"🥈 2nd Rank: **₹100 Extra**\n"
+            f"🥉 3rd Rank: **₹75 Extra**\n\n"
             f"🚀 Contest daily reset hota hai. Zyada refer karein aur leaderboard par aayein!"
         )
         bot.send_message(user_id, contest_text, parse_mode="Markdown")
@@ -287,7 +287,7 @@ def callback_handler(call):
     elif data == "dep_usdt":
         bot.send_message(user_id, "💵 **USDT Deposit Address (TRC20):**\n`TYoYAgDAQsnJVYyALd5KZXiCmPzdKkzUc9`\n\n⚠️ Minimum deposit: $5. Payment ke baad TXID bhejein.", parse_mode="Markdown")
     elif data == "dep_inr":
-        bot.send_message(user_id, "🇮🇳 **INR Deposit (UPI):**\nUPI ID: `shyamji@upi`\n\n⚠️ Payment karne ke baad UTR / Screenshot bhejein.", parse_mode="Markdown")
+        bot.send_message(user_id, "🇮🇳 **INR Deposit (UPI):**\nUPI ID: ``\n\n⚠️ Payment karne ke baad UTR / Screenshot bhejein.", parse_mode="Markdown")
     elif data == "dep_ton":
         bot.send_message(user_id, "💎 **TON Deposit Address:**\n`TON_WALLET_ADDRESS_YAHAN_DALO`\n\n⚠️ Minimum deposit: 1 TON.", parse_mode="Markdown")
     elif data == "dep_gram":
